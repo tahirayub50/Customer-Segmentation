@@ -1,0 +1,769 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Customer Segmentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Same design tokens as the Heart Disease Risk Classifier, so the two projects read as one portfolio */
+  :root {
+    --ground: #05090f;
+    --panel: #0a111b;
+    --panel-raised: #0e1724;
+    --line: rgba(140, 190, 230, 0.11);
+    --line-strong: rgba(140, 190, 230, 0.22);
+    --text: #e6eef6;
+    --text-2: #9aaec2;
+    --text-3: #71879c;
+    --accent: #45dfcf;
+    --accent-soft: rgba(69, 223, 207, 0.14);
+    --warn: #ffb547;
+    --warn-soft: rgba(255, 181, 71, 0.12);
+    --error: #ff5d6c;
+    --display: "Chakra Petch", "IBM Plex Sans", sans-serif;
+    --body: "IBM Plex Sans", system-ui, sans-serif;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --radius: 14px;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html { scrollbar-color: #24364a var(--ground); }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--ground); }
+  ::-webkit-scrollbar-thumb { background: #1d2c3d; border-radius: 10px; border: 2px solid var(--ground); }
+  ::selection { background: rgba(69, 223, 207, 0.3); color: #fff; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background-color: var(--ground);
+    background-image:
+      linear-gradient(rgba(120, 180, 230, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(120, 180, 230, 0.035) 1px, transparent 1px);
+    background-size: 24px 24px;
+    color: var(--text);
+    font-family: var(--body);
+    font-size: 15px;
+    line-height: 1.5;
+    caret-color: var(--accent);
+    -webkit-font-smoothing: antialiased;
+  }
+  .shell { max-width: 1280px; margin: 0 auto; padding: 32px 24px 64px; }
+
+  h1, h2, h3 { font-family: var(--display); font-weight: 600; margin: 0; text-wrap: balance; }
+  h1 { font-size: clamp(1.6rem, 1.1rem + 1.6vw, 2.4rem); line-height: 1.1; letter-spacing: -0.01em; margin-bottom: 6px; }
+  h2 { font-size: 1.3rem; }
+  h3 { font-size: 1rem; }
+  .muted { color: var(--text-2); }
+  .small { font-size: 13px; color: var(--text-3); }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* Header */
+  header { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; margin-bottom: 28px; }
+  header p { margin: 0; color: var(--text-2); max-width: 70ch; }
+  .stats { display: flex; gap: 28px; margin: 0; flex-wrap: wrap; }
+  .stats div { display: flex; flex-direction: column-reverse; }
+  .stats dt { color: var(--text-3); font-size: 12.5px; }
+  .stats dd { margin: 0; font-family: var(--display); font-size: 1.35rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .panel {
+    background: linear-gradient(180deg, var(--panel-raised), var(--panel));
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 24px 48px -24px rgba(0, 0, 0, 0.7);
+    padding: 24px 26px;
+  }
+  section + section { margin-top: 24px; }
+  .section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+  .section-head p { margin: 4px 0 0; color: var(--text-2); font-size: 14px; max-width: 75ch; }
+
+  /* Customers vs revenue bars: the headline finding */
+  .shares { display: grid; grid-template-columns: 150px 1fr; gap: 10px 16px; align-items: center; margin-bottom: 26px; }
+  .shares .label { color: var(--text-2); font-size: 14px; }
+  .bar { display: flex; height: 34px; border-radius: 8px; overflow: hidden; background: rgba(0, 0, 0, 0.3); }
+  .bar span {
+    display: flex; align-items: center; padding: 0 10px; min-width: 0;
+    color: #061018; font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden;
+    transition: flex-basis 900ms var(--ease-out);
+  }
+
+  /* Segment rows */
+  .segments { display: grid; gap: 12px; }
+  .segment {
+    display: grid;
+    grid-template-columns: minmax(210px, 1.3fr) repeat(5, minmax(78px, 0.6fr)) minmax(220px, 1.6fr);
+    gap: 16px; align-items: center;
+    padding: 14px 16px; border-radius: 11px;
+    background: rgba(0, 0, 0, 0.22); border: 1px solid var(--line);
+  }
+  .segment-name { display: flex; gap: 12px; align-items: flex-start; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; margin-top: 5px; }
+  .segment-name strong { font-family: var(--display); font-size: 1.05rem; display: block; }
+  .segment-name p { margin: 2px 0 0; color: var(--text-2); font-size: 13px; }
+  .metric b { display: block; font-family: var(--display); font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+  .metric span { color: var(--text-3); font-size: 12px; }
+  .action { color: var(--text-2); font-size: 13px; padding-left: 14px; border-left: 1px solid var(--line-strong); }
+  .action b { color: var(--text); font-weight: 500; display: block; font-size: 12px; margin-bottom: 2px; }
+
+  /* Map + scoring */
+  .work { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+
+  .toggle { display: inline-grid; grid-auto-flow: column; gap: 4px; padding: 4px; border-radius: 11px; background: rgba(0, 0, 0, 0.35); border: 1px solid var(--line); }
+  .toggle label { position: relative; }
+  .toggle input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+  .toggle span { display: block; padding: 6px 14px; border-radius: 8px; font-size: 13.5px; color: var(--text-2); transition: background 180ms ease, color 180ms ease; user-select: none; }
+  .toggle label:hover span { color: var(--text); background: rgba(140, 190, 230, 0.06); }
+  .toggle input:checked + span { background: var(--accent); color: #04140f; font-weight: 600; }
+  .toggle input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .map-wrap { position: relative; margin-top: 14px; border-radius: 11px; overflow: hidden; background: rgba(0, 0, 0, 0.28); border: 1px solid var(--line); }
+  canvas { display: block; width: 100%; height: 520px; cursor: crosshair; }
+  .tooltip {
+    position: absolute; pointer-events: none; z-index: 2;
+    background: rgba(10, 17, 27, 0.95); border: 1px solid var(--line-strong); border-radius: 9px;
+    padding: 9px 11px; font-size: 12.5px; line-height: 1.45; min-width: 170px;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+    opacity: 0; transform: translateY(4px); transition: opacity 120ms ease, transform 120ms ease;
+  }
+  .tooltip.show { opacity: 1; transform: none; }
+  .tooltip b { font-family: var(--display); font-size: 13.5px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 13px; color: var(--text);
+    background: rgba(0, 0, 0, 0.3); border: 1px solid var(--line-strong); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+    transition: opacity 160ms ease, border-color 160ms ease;
+  }
+  .chip[aria-pressed="false"] { opacity: 0.4; }
+  .chip:focus-visible, .ghost:focus-visible, .primary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .map-note { margin: 12px 0 0; font-size: 13px; color: var(--text-3); max-width: 80ch; }
+  .check { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text-2); cursor: pointer; }
+  .check input { accent-color: var(--accent); width: 16px; height: 16px; }
+
+  /* Form */
+  .presets { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 16px; }
+  .ghost {
+    font: inherit; font-size: 13px; color: var(--text-2); background: transparent;
+    border: 1px solid var(--line-strong); border-radius: 999px; padding: 6px 13px; cursor: pointer;
+    transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
+  }
+  .ghost:hover { color: var(--text); border-color: rgba(140, 190, 230, 0.4); background: rgba(140, 190, 230, 0.05); }
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+  .field label { display: block; font-weight: 500; font-size: 13.5px; margin-bottom: 4px; }
+  .field .hint { color: var(--text-3); font-size: 12px; margin-top: 4px; }
+  input[type="number"], input[type="date"] {
+    width: 100%; font: inherit; color: var(--text); font-variant-numeric: tabular-nums;
+    background: rgba(0, 0, 0, 0.35); border: 1px solid var(--line-strong); border-radius: 9px; padding: 9px 11px;
+    transition: border-color 160ms ease;
+  }
+  input[type="number"]:focus, input[type="date"]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  input[aria-invalid="true"] { border-color: var(--error); }
+  .primary {
+    font: inherit; font-weight: 600; color: #04140f; background: var(--accent);
+    border: 0; border-radius: 10px; padding: 10px 18px; cursor: pointer; transition: filter 160ms ease;
+  }
+  .primary:hover { filter: brightness(1.08); }
+  .primary:disabled { opacity: 0.5; cursor: wait; }
+
+  .result { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
+  .badge { display: inline-flex; align-items: center; gap: 10px; font-family: var(--display); font-size: 1.35rem; font-weight: 600; }
+  .badge .dot { width: 14px; height: 14px; margin: 0; }
+  .flag { margin-top: 10px; padding: 10px 12px; border-radius: 9px; background: var(--warn-soft); border: 1px solid rgba(255, 181, 71, 0.35); color: #ffd79a; font-size: 13.5px; }
+  .distances { margin-top: 14px; display: grid; gap: 7px; }
+  .distance { display: grid; grid-template-columns: 140px 1fr 44px; gap: 10px; align-items: center; font-size: 13px; }
+  .distance .track { height: 8px; border-radius: 4px; background: rgba(140, 190, 230, 0.1); overflow: hidden; }
+  .distance .track i { display: block; height: 100%; border-radius: 4px; transition: width 700ms var(--ease-out); }
+  .error { display: none; margin-top: 14px; padding: 11px 13px; border-radius: 9px; background: rgba(255, 93, 108, 0.1); border: 1px solid rgba(255, 93, 108, 0.35); color: #ffc2c8; font-size: 13.5px; }
+  .error.show { display: block; }
+
+  /* Upload */
+  .upload { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+  .drop {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 6px;
+    min-height: 150px; padding: 20px; border-radius: 12px; cursor: pointer;
+    border: 1.5px dashed var(--line-strong); background: rgba(0, 0, 0, 0.22);
+    transition: border-color 160ms ease, background 160ms ease;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop:focus-within { border-color: var(--accent); }
+  .drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .drop strong { font-family: var(--display); font-size: 1.05rem; }
+  .upload-options { display: grid; gap: 14px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .summary { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 14px; }
+  .summary .chip { cursor: default; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 11px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 9px 12px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--line); }
+  th { color: var(--text-3); font-weight: 500; font-size: 12.5px; background: rgba(0, 0, 0, 0.25); position: sticky; top: 0; }
+  td.right, th.right { text-align: right; }
+  tbody tr:hover { background: rgba(140, 190, 230, 0.04); }
+  .warn-text { color: var(--warn); }
+
+  footer { margin-top: 28px; color: var(--text-3); font-size: 12.5px; max-width: 90ch; }
+
+  @media (max-width: 1100px) {
+    .segment { grid-template-columns: minmax(180px, 1.4fr) repeat(5, minmax(64px, 0.6fr)); }
+    .action { grid-column: 1 / -1; padding-left: 0; border-left: 0; border-top: 1px solid var(--line); padding-top: 10px; }
+  }
+  @media (max-width: 960px) {
+    .work, .upload { grid-template-columns: 1fr; }
+    canvas { height: 420px; }
+  }
+  @media (max-width: 640px) {
+    .shell { padding: 24px 16px 48px; }
+    .panel { padding: 18px 16px; }
+    .shares { grid-template-columns: 1fr; gap: 6px; }
+    .segment { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .segment-name { grid-column: 1 / -1; }
+    .fields { grid-template-columns: 1fr; }
+    canvas { height: 360px; }
+    .distance { grid-template-columns: 110px 1fr 40px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header>
+    <div>
+      <h1>Customer Segmentation</h1>
+      <p>Segments, outliers and customer maps for <span id="h-customers">-</span> customers of a UK online gift shop,
+        built with K-Means, DBSCAN, PCA and t-SNE.</p>
+    </div>
+    <dl class="stats" aria-label="Model summary">
+      <div><dt>Customers</dt><dd id="s-customers">-</dd></div>
+      <div><dt>Segments (k)</dt><dd id="s-k">-</dd></div>
+      <div><dt>Silhouette</dt><dd id="s-silhouette">-</dd></div>
+      <div><dt>Outliers</dt><dd id="s-outliers">-</dd></div>
+    </dl>
+  </header>
+
+  <main>
+    <section class="panel" aria-labelledby="segments-title">
+      <div class="section-head">
+        <div>
+          <h2 id="segments-title">Segments</h2>
+          <p id="segments-lead">Loading the model...</p>
+        </div>
+      </div>
+      <div class="shares" aria-hidden="true">
+        <span class="label">Share of customers</span><div class="bar" id="bar-customers"></div>
+        <span class="label">Share of revenue</span><div class="bar" id="bar-revenue"></div>
+      </div>
+      <div class="segments" id="segment-list"></div>
+      <div class="error" id="overview-error" role="alert"></div>
+    </section>
+
+    <section class="work">
+      <div class="panel" aria-labelledby="map-title">
+        <div class="section-head">
+          <div>
+            <h2 id="map-title">Customer map</h2>
+            <p>Every dot is a customer. Hover to see their numbers; click a segment below to hide it.</p>
+          </div>
+          <div class="toggle" role="radiogroup" aria-label="Map projection">
+            <label><input type="radio" name="projection" value="tsne" checked><span>t-SNE</span></label>
+            <label><input type="radio" name="projection" value="pca"><span>PCA</span></label>
+          </div>
+        </div>
+        <div class="map-wrap">
+          <canvas id="map" role="img" aria-label="Scatter plot of all customers, coloured by segment"></canvas>
+          <div class="tooltip" id="tooltip"></div>
+        </div>
+        <div class="row" style="justify-content: space-between; margin-top: 12px;">
+          <div class="legend" id="legend" style="margin-top: 0;"></div>
+          <label class="check"><input type="checkbox" id="show-outliers" checked> Ring DBSCAN outliers</label>
+        </div>
+        <p class="map-note" id="map-note"></p>
+      </div>
+
+      <div class="panel" aria-labelledby="score-title">
+        <h2 id="score-title">Score a customer</h2>
+        <p class="muted" style="margin: 4px 0 10px; font-size: 14px;">Enter a customer's numbers to see their segment and where they land on the PCA map.</p>
+        <div class="presets" id="presets">
+          <button type="button" class="ghost" data-preset="champion">Big regular buyer</button>
+          <button type="button" class="ghost" data-preset="new">Brand new</button>
+          <button type="button" class="ghost" data-preset="lapsed">Gone quiet</button>
+          <button type="button" class="ghost" data-preset="returner">Returns a lot</button>
+          <button type="button" class="ghost" data-preset="whale">Wholesaler</button>
+        </div>
+        <form id="score-form" novalidate>
+          <div class="fields" id="fields"></div>
+          <div class="row" style="margin-top: 18px;">
+            <button type="submit" class="primary" id="score-button">Score customer</button>
+          </div>
+        </form>
+        <div class="error" id="score-error" role="alert"></div>
+        <div class="result" id="score-result" hidden aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="upload-title">
+      <div class="section-head">
+        <div>
+          <h2 id="upload-title">Segment a customer list</h2>
+          <p>Upload raw transactions as CSV, in the same format as the Online Retail II data. The app cleans them,
+            builds each customer's features and segments every customer in the file.</p>
+        </div>
+      </div>
+      <div class="upload">
+        <label class="drop" id="drop">
+          <input type="file" id="file" accept=".csv,text/csv">
+          <strong id="drop-title">Drop a CSV here, or click to choose</strong>
+          <span class="small">Columns: Invoice, StockCode, Quantity, InvoiceDate, Price, Customer ID, Country (Description optional). Up to 50 MB.</span>
+        </label>
+        <div class="upload-options">
+          <div class="field">
+            <label for="snapshot">Analysis date <span class="small">(optional)</span></label>
+            <input type="date" id="snapshot">
+            <div class="hint">"Today" for Recency. Leave empty to use the day after the last invoice in the file.</div>
+          </div>
+          <div class="row">
+            <button type="button" class="primary" id="upload-button" disabled>Segment customers</button>
+            <button type="button" class="ghost" id="sample-button">Try the sample file</button>
+            <a class="ghost" href="/api/sample" download style="text-decoration: none;">Download sample</a>
+          </div>
+        </div>
+      </div>
+      <div class="error" id="upload-error" role="alert"></div>
+      <div id="upload-result" hidden aria-live="polite"></div>
+    </section>
+  </main>
+
+  <footer id="footer">A learning project on public data (UCI Online Retail II).</footer>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const fmt = (n, d = 0) => Number(n).toLocaleString('en-GB', { minimumFractionDigits: d, maximumFractionDigits: d });
+const pct = (x, d = 1) => (x * 100).toFixed(d) + '%';
+const money = (n) => '£' + fmt(n);
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+let overview = null;
+let colors = {};
+
+// ---------- Segments overview ----------
+function renderOverview(o) {
+  overview = o;
+  o.segments.forEach((s) => { colors[s.name] = s.color; });
+  $('h-customers').textContent = fmt(o.n_customers);
+  $('s-customers').textContent = fmt(o.n_customers);
+  $('s-k').textContent = o.k;
+  $('s-silhouette').textContent = o.silhouette.toFixed(3);
+  $('s-outliers').textContent = fmt(o.n_outliers);
+
+  const top = o.segments[0];
+  $('segments-lead').textContent =
+    `${top.name} are ${pct(top.share_of_customers, 0)} of customers but bring ${pct(top.share_of_revenue, 0)} of revenue. ` +
+    `DBSCAN flags ${fmt(o.n_outliers)} unusual customers (${pct(o.n_outliers / o.n_customers)}), who bring ${pct(o.outlier_revenue_share, 0)} of revenue.`;
+
+  for (const [bar, key] of [['bar-customers', 'share_of_customers'], ['bar-revenue', 'share_of_revenue']]) {
+    $(bar).innerHTML = o.segments.map((s) =>
+      `<span style="flex-basis:0%; background:${s.color}" title="${s.name}: ${pct(s[key])}">${s[key] > 0.07 ? pct(s[key], 0) : ''}</span>`).join('');
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      [...$(bar).children].forEach((el, i) => { el.style.flexBasis = (o.segments[i][key] * 100) + '%'; });
+    }));
+  }
+
+  $('segment-list').innerHTML = o.segments.map((s) => `
+    <div class="segment">
+      <div class="segment-name"><span class="dot" style="background:${s.color}"></span>
+        <div><strong>${s.name}</strong><p>${s.description}</p></div></div>
+      <div class="metric"><b>${fmt(s.customers)}</b><span>customers</span></div>
+      <div class="metric"><b>${pct(s.share_of_revenue)}</b><span>of revenue</span></div>
+      <div class="metric"><b>${fmt(s.medians.Recency)} d</b><span>since last order</span></div>
+      <div class="metric"><b>${fmt(s.medians.Frequency)}</b><span>orders</span></div>
+      <div class="metric"><b>${money(s.medians.Monetary)}</b><span>net spend</span></div>
+      <div class="action"><b>Suggested action</b>${s.action}</div>
+    </div>`).join('');
+
+  const [start, end] = o.data_range.map((d) => new Date(d));
+  const opts = { day: 'numeric', month: 'short', year: 'numeric' };
+  $('footer').textContent =
+    `Model trained ${o.trained_at.replace('T', ' ')} on transactions from ${start.toLocaleDateString('en-GB', opts)} to ` +
+    `${end.toLocaleDateString('en-GB', opts)} (UCI Online Retail II). k = ${o.k} chosen by silhouette; ` +
+    `DBSCAN eps = ${o.dbscan.eps.toFixed(2)}, min_samples = ${o.dbscan.min_samples}. A learning project on public data.`;
+}
+
+// ---------- Customer map (canvas) ----------
+const canvas = $('map');
+const ctx = canvas.getContext('2d');
+let mapData = null;
+let projection = 'tsne';
+let current = null;           // positions currently drawn (animated between projections)
+let hidden = new Set();
+let showOutliers = true;
+let newCustomer = null;        // {pca:[x,y], segment}
+let hoverIndex = -1;
+let bounds = null;
+
+const NOTES = {
+  tsne: 't-SNE keeps each customer next to their real neighbours (trustworthiness 0.996), so segments separate clearly. ' +
+        'Distances between groups and group sizes are NOT meaningful, and a new customer can\'t be added to this map.',
+  pca: () => `PCA is a flat projection: right = bigger customers (PC1, ${pct(overview.pca_variance[0], 0)} of the variance), ` +
+        `up = older customers who haven't bought lately (PC2, ${pct(overview.pca_variance[1], 0)}). ` +
+        `It keeps ${pct(overview.pca_variance[0] + overview.pca_variance[1], 0)} of the information, so some segments overlap, ` +
+        'but it can place new customers, shown as a star.'
+};
+
+function computeBounds(points) {
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const [x, y] of points) {
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (y < minY) minY = y; if (y > maxY) maxY = y;
+  }
+  return { minX, maxX, minY, maxY };
+}
+
+function resizeCanvas() {
+  const ratio = window.devicePixelRatio || 1;
+  const { width, height } = canvas.getBoundingClientRect();
+  canvas.width = Math.round(width * ratio);
+  canvas.height = Math.round(height * ratio);
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  draw();
+}
+
+function toScreen(x, y) {
+  const { width, height } = canvas.getBoundingClientRect();
+  const pad = 22;
+  const b = bounds;
+  const scale = Math.min((width - 2 * pad) / (b.maxX - b.minX), (height - 2 * pad) / (b.maxY - b.minY));
+  const offsetX = (width - (b.maxX - b.minX) * scale) / 2;
+  const offsetY = (height - (b.maxY - b.minY) * scale) / 2;
+  return [offsetX + (x - b.minX) * scale, height - (offsetY + (y - b.minY) * scale)];
+}
+
+function draw() {
+  if (!mapData || !current) return;
+  const { width, height } = canvas.getBoundingClientRect();
+  ctx.clearRect(0, 0, width, height);
+
+  for (let i = 0; i < current.length; i++) {
+    if (hidden.has(mapData.segment[i])) continue;
+    const [sx, sy] = toScreen(current[i][0], current[i][1]);
+    ctx.globalAlpha = 0.72;
+    ctx.fillStyle = mapData.colors[mapData.segment[i]];
+    ctx.beginPath(); ctx.arc(sx, sy, 2.3, 0, Math.PI * 2); ctx.fill();
+  }
+  if (showOutliers) {
+    ctx.globalAlpha = 0.95;
+    ctx.strokeStyle = '#e6eef6';
+    ctx.lineWidth = 1.1;
+    for (let i = 0; i < current.length; i++) {
+      if (!mapData.outlier[i] || hidden.has(mapData.segment[i])) continue;
+      const [sx, sy] = toScreen(current[i][0], current[i][1]);
+      ctx.beginPath(); ctx.arc(sx, sy, 5, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+  if (hoverIndex >= 0) {
+    const [sx, sy] = toScreen(current[hoverIndex][0], current[hoverIndex][1]);
+    ctx.globalAlpha = 1; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(sx, sy, 7, 0, Math.PI * 2); ctx.stroke();
+  }
+  if (newCustomer && projection === 'pca') {
+    const [sx, sy] = toScreen(newCustomer.pca[0], newCustomer.pca[1]);
+    drawStar(sx, sy, 13, colors[newCustomer.segment]);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawStar(x, y, r, fill) {
+  ctx.globalAlpha = 1;
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const radius = i % 2 === 0 ? r : r * 0.45;
+    const angle = -Math.PI / 2 + i * Math.PI / 5;
+    ctx.lineTo(x + radius * Math.cos(angle), y + radius * Math.sin(angle));
+  }
+  ctx.closePath();
+  ctx.fillStyle = fill; ctx.fill();
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke();
+}
+
+// Switching projection animates every customer from one map to the other
+let animation = null;
+function setProjection(next) {
+  projection = next;
+  $('map-note').textContent = typeof NOTES[next] === 'function' ? NOTES[next]() : NOTES[next];
+  document.querySelector(`input[name="projection"][value="${next}"]`).checked = true;
+  if (!mapData) return;
+
+  const target = mapData[next];
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!current || reduce) {
+    current = target.map((p) => p.slice());
+    bounds = computeBounds(target);
+    draw();
+    return;
+  }
+  // Animate in normalised space so both maps fill the canvas the same way
+  const fromBounds = bounds, toBounds = computeBounds(target);
+  const norm = (p, b) => [(p[0] - b.minX) / (b.maxX - b.minX), (p[1] - b.minY) / (b.maxY - b.minY)];
+  const from = current.map((p) => norm(p, fromBounds));
+  const to = target.map((p) => norm(p, toBounds));
+  const start = performance.now(), duration = 900;
+  cancelAnimationFrame(animation);
+  bounds = { minX: 0, maxX: 1, minY: 0, maxY: 1 };
+  function frame(now) {
+    const t = Math.min(1, (now - start) / duration);
+    const e = 1 - Math.pow(1 - t, 4);
+    current = from.map((p, i) => [p[0] + (to[i][0] - p[0]) * e, p[1] + (to[i][1] - p[1]) * e]);
+    draw();
+    if (t < 1) animation = requestAnimationFrame(frame);
+    else { current = target.map((p) => p.slice()); bounds = toBounds; draw(); }
+  }
+  animation = requestAnimationFrame(frame);
+}
+
+document.querySelectorAll('input[name="projection"]').forEach((input) =>
+  input.addEventListener('change', () => setProjection(input.value)));
+$('show-outliers').addEventListener('change', (e) => { showOutliers = e.target.checked; draw(); });
+
+function renderLegend() {
+  $('legend').innerHTML = mapData.segments.map((name, i) =>
+    `<button type="button" class="chip" aria-pressed="true" data-index="${i}">
+       <span class="dot" style="background:${mapData.colors[i]}; margin:0; width:10px; height:10px"></span>${name}</button>`).join('');
+  $('legend').querySelectorAll('.chip').forEach((chip) => chip.addEventListener('click', () => {
+    const i = Number(chip.dataset.index);
+    hidden.has(i) ? hidden.delete(i) : hidden.add(i);
+    chip.setAttribute('aria-pressed', String(!hidden.has(i)));
+    draw();
+  }));
+}
+
+// Hover (or tap on a phone): find the nearest visible customer within 10 px
+function showNearest(event) {
+  if (!current) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = event.clientX - rect.left, my = event.clientY - rect.top;
+  let best = -1, bestDistance = 100;
+  for (let i = 0; i < current.length; i++) {
+    if (hidden.has(mapData.segment[i])) continue;
+    const [sx, sy] = toScreen(current[i][0], current[i][1]);
+    const d = (sx - mx) ** 2 + (sy - my) ** 2;
+    if (d < bestDistance) { bestDistance = d; best = i; }
+  }
+  if (best !== hoverIndex) { hoverIndex = best; draw(); }
+  const tip = $('tooltip');
+  if (best < 0) { tip.classList.remove('show'); return; }
+  const segment = mapData.segments[mapData.segment[best]];
+  tip.innerHTML = `<b>Customer ${mapData.id[best]}</b><br>
+    <span style="color:${mapData.colors[mapData.segment[best]]}">●</span> ${segment}${mapData.outlier[best] ? ' · <span class="warn-text">outlier</span>' : ''}<br>
+    Last order ${fmt(mapData.recency[best])} days ago<br>
+    ${fmt(mapData.frequency[best])} order${mapData.frequency[best] === 1 ? '' : 's'} · ${money(mapData.monetary[best])} net<br>
+    Returned ${pct(mapData.return_rate[best])}`;
+  const [sx, sy] = toScreen(current[best][0], current[best][1]);
+  tip.style.left = Math.min(sx + 14, rect.width - 200) + 'px';
+  tip.style.top = Math.max(sy - 20, 8) + 'px';
+  tip.classList.add('show');
+}
+canvas.addEventListener('pointermove', showNearest);
+canvas.addEventListener('pointerdown', showNearest);
+canvas.addEventListener('pointerleave', () => { hoverIndex = -1; $('tooltip').classList.remove('show'); draw(); });
+new ResizeObserver(resizeCanvas).observe(canvas);
+
+// ---------- Score a customer ----------
+const FIELD_INFO = {
+  Recency: ['Days since last order', 'days', 1],
+  Frequency: ['Number of orders', 'orders', 1],
+  Monetary: ['Net spend', 'GBP, after cancellations', 1],
+  Tenure: ['Days since first order', 'days', 1],
+  ProductVariety: ['Different products bought', 'products', 1],
+  ReturnRate: ['Return rate', '0 to 1 (share of value cancelled)', 0.01]
+};
+const PRESETS = {
+  champion: { Recency: 10, Frequency: 20, Monetary: 8000, Tenure: 600, ProductVariety: 200, ReturnRate: 0.01 },
+  new:      { Recency: 15, Frequency: 1, Monetary: 300, Tenure: 15, ProductVariety: 20, ReturnRate: 0 },
+  lapsed:   { Recency: 400, Frequency: 2, Monetary: 250, Tenure: 500, ProductVariety: 15, ReturnRate: 0 },
+  returner: { Recency: 200, Frequency: 4, Monetary: 900, Tenure: 500, ProductVariety: 30, ReturnRate: 0.35 },
+  whale:    { Recency: 1, Frequency: 300, Monetary: 900000, Tenure: 730, ProductVariety: 2000, ReturnRate: 0 }
+};
+
+$('fields').innerHTML = Object.entries(FIELD_INFO).map(([name, [label, hint, step]]) => `
+  <div class="field">
+    <label for="f-${name}">${label}</label>
+    <input type="number" id="f-${name}" name="${name}" step="${step}" min="0" inputmode="decimal" aria-describedby="h-${name}">
+    <div class="hint" id="h-${name}">${hint}</div>
+  </div>`).join('');
+
+function fillForm(values) {
+  for (const [name, value] of Object.entries(values)) $(`f-${name}`).value = value;
+}
+fillForm(PRESETS.champion);
+$('presets').querySelectorAll('[data-preset]').forEach((b) =>
+  b.addEventListener('click', () => { fillForm(PRESETS[b.dataset.preset]); score(); }));
+
+async function score() {
+  const body = {};
+  for (const name of Object.keys(FIELD_INFO)) {
+    const input = $(`f-${name}`);
+    input.removeAttribute('aria-invalid');
+    body[name] = input.value === '' ? null : Number(input.value);
+  }
+  $('score-button').disabled = true;
+  try {
+    const response = await fetch('/api/predict', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await response.json();
+    if (!response.ok) {
+      for (const error of data.errors || []) {
+        const name = (error.match(/'(\w+)'/) || [])[1];
+        if (name && $(`f-${name}`)) $(`f-${name}`).setAttribute('aria-invalid', 'true');
+      }
+      throw new Error((data.errors || ['The server rejected the input.']).join(' '));
+    }
+    $('score-error').classList.remove('show');
+    showScore(data);
+  } catch (error) {
+    $('score-error').textContent = error instanceof TypeError ? "Can't reach the server. Is 'python app.py' running?" : error.message;
+    $('score-error').classList.add('show');
+  } finally {
+    $('score-button').disabled = false;
+  }
+}
+
+function showScore(r) {
+  const entries = Object.entries(r.distances).sort((a, b) => a[1] - b[1]);
+  const max = Math.max(...entries.map(([, d]) => d));
+  $('score-result').hidden = false;
+  $('score-result').innerHTML = `
+    <div class="badge"><span class="dot" style="background:${colors[r.segment]}"></span>${r.segment}</div>
+    <p class="muted" style="margin: 6px 0 0; font-size: 14px;">${r.description}</p>
+    <p style="margin: 8px 0 0; font-size: 13.5px;"><b style="font-weight:500">Suggested action:</b> <span class="muted">${r.action}</span></p>
+    ${r.outlier ? `<div class="flag">Unusual customer: DBSCAN finds no dense group of similar customers nearby.
+      Treat the segment as a rough guide and look at this customer individually.</div>` : ''}
+    <div class="distances" aria-label="Distance to each segment centre">
+      <div class="small">Distance to each segment centre (shorter = more similar). Next closest: ${r.runner_up}.</div>
+      ${entries.map(([name, d]) => `
+        <div class="distance"><span>${name}</span>
+          <span class="track"><i style="width:0%; background:${colors[name]}" data-width="${Math.max(3, (1 - d / (max * 1.05)) * 100)}"></i></span>
+          <span class="num muted" style="text-align:right">${d.toFixed(2)}</span></div>`).join('')}
+    </div>`;
+  requestAnimationFrame(() => requestAnimationFrame(() =>
+    $('score-result').querySelectorAll('.track i').forEach((i) => { i.style.width = i.dataset.width + '%'; })));
+
+  newCustomer = { pca: r.pca, segment: r.segment };
+  if (projection !== 'pca') setProjection('pca'); else draw();
+}
+
+$('score-form').addEventListener('submit', (e) => { e.preventDefault(); score(); });
+
+// ---------- Batch upload ----------
+let chosenFile = null;
+let lastResult = null;
+
+function chooseFile(file) {
+  chosenFile = file;
+  $('drop-title').textContent = file ? `${file.name} (${fmt(file.size / 1024)} KB)` : 'Drop a CSV here, or click to choose';
+  $('upload-button').disabled = !file;
+}
+$('file').addEventListener('change', (e) => chooseFile(e.target.files[0] || null));
+const drop = $('drop');
+['dragenter', 'dragover'].forEach((type) => drop.addEventListener(type, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach((type) => drop.addEventListener(type, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', (e) => { if (e.dataTransfer.files[0]) chooseFile(e.dataTransfer.files[0]); });
+
+$('sample-button').addEventListener('click', async () => {
+  try {
+    const response = await fetch('/api/sample');
+    if (!response.ok) throw new Error((await response.json()).errors.join(' '));
+    chooseFile(new File([await response.blob()], 'sample_transactions.csv', { type: 'text/csv' }));
+    upload();
+  } catch (error) {
+    $('upload-error').textContent = error.message;
+    $('upload-error').classList.add('show');
+  }
+});
+$('upload-button').addEventListener('click', upload);
+
+async function upload() {
+  if (!chosenFile) return;
+  const form = new FormData();
+  form.append('file', chosenFile);
+  if ($('snapshot').value) form.append('snapshot_date', $('snapshot').value);
+  $('upload-button').disabled = true;
+  $('upload-button').textContent = 'Segmenting...';
+  try {
+    const response = await fetch('/api/predict-batch', { method: 'POST', body: form });
+    const data = await response.json();
+    if (!response.ok) throw new Error((data.errors || ['Upload failed.']).join(' '));
+    $('upload-error').classList.remove('show');
+    lastResult = data;
+    showUpload(data);
+  } catch (error) {
+    $('upload-error').textContent = error instanceof TypeError ? "Can't reach the server. Is 'python app.py' running?" : error.message;
+    $('upload-error').classList.add('show');
+  } finally {
+    $('upload-button').disabled = false;
+    $('upload-button').textContent = 'Segment customers';
+  }
+}
+
+function showUpload(d) {
+  const shown = d.customers.slice(0, 100);
+  $('upload-result').hidden = false;
+  $('upload-result').innerHTML = `
+    <div class="summary">
+      ${Object.entries(d.summary).map(([name, n]) =>
+        `<span class="chip"><span class="dot" style="background:${d.colors[name]}; margin:0; width:10px; height:10px"></span>${name}: <b class="num">${fmt(n)}</b></span>`).join('')}
+      <span class="chip"><span class="warn-text">Outliers: <b class="num">${fmt(d.outliers)}</b></span></span>
+    </div>
+    <p class="small" style="margin: 0 0 12px;">
+      Read ${fmt(d.rows_read)} rows${d.rows_unreadable ? ` (${fmt(d.rows_unreadable)} with unreadable dates, quantities or prices were skipped)` : ''};
+      ${fmt(d.rows_used)} usable after cleaning. Recency measured on ${d.snapshot_date} (last invoice ${d.last_invoice}).
+    </p>
+    <div class="row" style="margin-bottom: 12px;">
+      <button type="button" class="primary" id="download-button">Download ${fmt(d.customers.length)} customers as CSV</button>
+      ${d.customers.length > shown.length ? `<span class="small">Showing the first ${shown.length}.</span>` : ''}
+    </div>
+    <div class="table-wrap" style="max-height: 420px;">
+      <table>
+        <thead><tr><th>Customer</th><th>Country</th><th>Segment</th><th>Outlier</th>
+          <th class="right">Days since last order</th><th class="right">Orders</th><th class="right">Net spend</th><th class="right">Return rate</th></tr></thead>
+        <tbody>${shown.map((c) => `<tr>
+          <td>${c.customer}</td><td>${escapeHtml(c.country)}</td>
+          <td><span class="dot" style="display:inline-block; background:${d.colors[c.segment]}; margin:0 6px 0 0; width:9px; height:9px"></span>${c.segment}</td>
+          <td>${c.outlier ? '<span class="warn-text">yes</span>' : ''}</td>
+          <td class="right">${fmt(c.features.Recency)}</td><td class="right">${fmt(c.features.Frequency)}</td>
+          <td class="right">${money(c.features.Monetary)}</td><td class="right">${pct(c.features.ReturnRate)}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  $('download-button').addEventListener('click', downloadCsv);
+}
+
+function downloadCsv() {
+  const header = ['CustomerID', 'Country', 'Segment', 'IsOutlier', ...overview.features, 'AvgOrderValue'];
+  const quote = (v) => /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : v;
+  const lines = [header.join(',')].concat(lastResult.customers.map((c) =>
+    [c.customer, c.country, c.segment, c.outlier, ...overview.features.map((f) => c.features[f]), c.avg_order_value].map(quote).join(',')));
+  const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }));
+  const link = Object.assign(document.createElement('a'), { href: url, download: 'customer_segments.csv' });
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---------- Start ----------
+Promise.all([fetch('/api/overview').then((r) => r.json()), fetch('/api/map').then((r) => r.json())])
+  .then(([o, m]) => {
+    renderOverview(o);
+    mapData = m;
+    renderLegend();
+    resizeCanvas();
+    setProjection('tsne');
+  })
+  .catch(() => {
+    $('overview-error').textContent = "Can't load the model from the server. Check that 'python app.py' is running, then reload.";
+    $('overview-error').classList.add('show');
+  });
+</script>
+</body>
+</html>
